@@ -34,6 +34,7 @@ public class Interconnects{
 		this.getNumSections();
 		try{
 			this.construct();
+			System.out.println("Done!");
 		}catch(FileNotFoundException e){
 			System.out.println("Unable to construct netlist.");
 		}
@@ -184,7 +185,7 @@ public class Interconnects{
 				CPS.set(row, col, length * CParams.get(row, col) / n);
 			}
 		}
-		System.out.println("Constructing: " + n + " Sections");
+		System.out.println("Constructing: " + size + " interconnects of "+ n + " sections");
 		
 		//interconnect #, section #, component #, 2 nodes
 		int[][][][] sectionComponents;
