@@ -185,46 +185,119 @@ public class Interconnects{
 			}
 		}
 		System.out.println("Constructing: " + n + " Sections");
-		PrintWriter writer = new PrintWriter(new File("interconnect"));
 		
-		int[] beginningNodes = new int[size];
-		
+		//interconnect #, section #, component #, 2 nodes
+		int[][][][] sectionComponents;
 		int currentNode = startNode;
+		int numberCoupled = n*(n-1)/2;
+		int[][][] coupledComponents = new int[numberCoupled][2][2];
+		int[] sectionStartNodes = new int[n];
+		int[][][] sectionInductanceNodes = new int[size][n][2];
 		
+		//TODO implement conductance to ground being zero or non-zero
+		/*
+		if(RGPS != 0 && Double.isFinite(RGPS)){
+			sectionComponents = new int[size][n][4+n-1][2];
+		}
+		else{
+			sectionComponents = new int[size][n][3+n-1][2];
+		}
+		*/
+		
+		sectionComponents = new int[size][n][3+n-1][2];
+		for(int cI = 0; cI < size; cI++){
+			for(int cS = 0; cS < n; cS++){
+				//set sectionStartNodes so coupled components know which nodes to connect to
+				if(cS == 0){
+					sectionStartNodes[cI] = currentNode;
+				}
+				//conductance to ground
+				sectionComponents[cI][cS][0][0] = currentNode;
+				sectionComponents[cI][cS][0][1] = 0;
+				
+				//capacitance to ground
+				sectionComponents[cI][cS][1][0] = currentNode;
+				sectionComponents[cI][cS][1][1] = 0;
+				
+				//resistance per section
+				sectionComponents[cI][cS][2][0] = currentNode;
+				sectionComponents[cI][cS][2][1] = ++currentNode;
+				
+				//inductance per section
+				sectionComponents[cI][cS][3][0] = currentNode;
+				sectionComponents[cI][cS][3][1] = ++currentNode;
+				sectionInductanceNodes[cI][cS][0] = sectionComponents[cI][cS][2][0];
+				sectionInductanceNodes[cI][cS][1] = sectionComponents[cI][cS][2][1];
+				
+				//vcvs per section
+				for(int vs = 0; vs < size-1; vs++){
+					sectionComponents[cI][cS][vs+4][0] = currentNode;
+					sectionComponents[cI][cS][vs+4][1] = ++currentNode;
+				}
+			}
+		}
+		
+		//n(n-1)/2 coupled connections
+		int indexOfCoupled = 0;
+		for(int current = 0; current < size-1; current++){
+			for(int next = current+1; next < size; next++){
+				//coupled resistance
+				coupledComponents[indexOfCoupled][0][0] = sectionStartNodes[current];
+				coupledComponents[indexOfCoupled][0][1] = sectionStartNodes[next];
+				
+				//coupled capacitance
+				coupledComponents[indexOfCoupled][1][0] = sectionStartNodes[current];
+				coupledComponents[indexOfCoupled][1][1] = sectionStartNodes[next];
+				
+				indexOfCoupled++;
+			}
+		}
+		
+		PrintWriter writer = new PrintWriter(new File("interconnect"));
+		//nodes all set up, start creating netlist with values.
 		int resCount = 1;
 		int capCount = 1;
 		int indCount = 1;
 		int vcvsCount = 1;
+		
 		for(int cI = 0; cI < size; cI++){
-			beginningNodes[cI] = currentNode;
-			for(int currentSec = 0; currentSec < n; currentSec++){
-				//TODO make if elseif else to catch case of both being zero, no time right now
-				if(RGPS != 0 && Double.isFinite(RGPS)){
-					writer.println("R"+(resCount++)+" "+currentNode+" 0 "+RGPS);
-				}
-				if(CPS.get(cI, cI) != 0){
-					writer.println("C"+(capCount++)+" "+currentNode+" 0 "+CPS.get(cI, cI));
-				}
-				if(RPS != 0){
-					writer.println("R"+(resCount++)+" "+(currentNode++)+" "+currentNode+" "+RPS);
-				}
-				if(LPS.get(cI, cI) != 0){
-					writer.println("L"+(indCount++)+" "+(currentNode++)+" "+currentNode+" "+LPS.get(cI, cI));
-				}
-				if(size > 1){
-					//TODO finish VCVS sources
-					//for loop to insert vcvs from coupling
-					for(int numVCVS = 1; numVCVS < size; numVCVS++){
-						writer.println("E"+(vcvsCount++)+" "+(currentNode++)+" "+currentNode+" "+LPS.get(cI, cI));
+			for(int cS = 0; cS < n; cS++){
+				//TODO conductance to ground
+				//writer.println("R"+(resCount++)+" "+sectionComponents[cI][cS][0][0]+" "+sectionComponents[cI][cS][0][1]+" "+RGPS);
+
+				//capacitance to ground
+				writer.println("C"+(capCount++)+" "+sectionComponents[cI][cS][1][0]+" "+sectionComponents[cI][cS][1][1]+" "+CPS.get(cI, cI));
+				
+				//resistance per section
+				writer.println("R"+(resCount++)+" "+sectionComponents[cI][cS][2][0]+" "+sectionComponents[cI][cS][2][1]+" "+RPS);
+				
+				//inductance per section
+				writer.println("L"+(indCount++)+" "+sectionComponents[cI][cS][3][0]+" "+sectionComponents[cI][cS][3][1]+" "+LPS.get(cI, cI));
+				
+				//VCVS per section, black magic happens here.
+				//I feel like Linus Torvalds. "you aren't expected to understand this"
+				int indexVCVS = 0;
+				for(int cS2 = 0; cS2 < size; cS2++){
+					if(cI != cS2){
+						//inductance per section
+						double inductance = LPS.get(cI,cS2)/LPS.get(cS2, cS2);
+						writer.println("E"+(vcvsCount++)+" "+sectionComponents[cI][cS2][3][0]+" "+sectionComponents[cI][cS2][3][1]+" "+
+						sectionComponents[cI][cS][4+indexVCVS][0]+" "+sectionComponents[cI][cS][4+indexVCVS][1]+" "+inductance);
+						indexVCVS++;
 					}
 				}
 			}
 		}
 		
-		if(size > 1){
-			//TODO finish coupling of capacitance/conductance
-			//couple the interconnects
-			
+		//n(n-1)/2 coupled connections
+		for(int current = 0; current < size-1; current++){
+			for(int next = current+1; next < size; next++){
+				//TODO coupled conductance
+				//writer.println("R"+(resCount++)+" "+sectionStartNodes[current]+" "+sectionStartNodes[next]+" "+RGPS);
+
+				//coupled capacitance
+				writer.println("C"+(capCount++)+" "+sectionStartNodes[current]+" "+sectionStartNodes[next]+" "+CPS.get(current, next));
+			}
 		}
 		writer.close();
 	}
