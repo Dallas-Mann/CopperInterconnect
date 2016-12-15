@@ -235,6 +235,8 @@ public class Interconnects{
 					sectionComponents[cI][cS][vs+4][1] = ++currentNode;
 				}
 			}
+			//increment currentNode to separate interconnects
+			currentNode++;
 		}
 		
 		//n(n-1)/2 coupled connections
@@ -287,6 +289,8 @@ public class Interconnects{
 					}
 				}
 			}
+			//separate each interconnect with a blank line
+			writer.println();
 		}
 		
 		//n(n-1)/2 coupled connections
